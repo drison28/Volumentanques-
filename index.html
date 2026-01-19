@@ -32,7 +32,7 @@
 
     <div class="card card-calib" id="panelCalib">
         <div id="lockMsg" class="lock-overlay">🔒 TANQUE YA CALIBRADO</div>
-        <h3>⚙️ ESTACIÓN DE CALIBRACIÓN (EDITABLE)</h3>
+        <h3>⚙️ ESTACIÓN DE CALIBRACIÓN</h3>
         
         <div class="grid-datos">
             <div class="box-edit"><span class="label">Producto</span><input id="c-prod" class="input-edit" type="text" value="DIESEL"></div>
@@ -66,21 +66,27 @@
     </div>
 
     <div class="card">
-        <h3>📋 DATOS DEL TANQUE Y VOLUMEN</h3>
+        <h3>📋 DATOS DEL TANQUE</h3>
         <select id="listaTanques" onchange="cambiarTanque()">
             <option>Cargando tanques...</option>
         </select>
         
         <div class="grid-datos">
-            <div class="box-edit"><span class="label">Comunicación</span><input id="e-com" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Estado</span><span id="v-est" style="color:red; font-weight:bold;">-</span></div>
-            <div class="box-edit"><span class="label">Ubicación</span><input id="e-ubic" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Capacidad</span><input id="e-cap" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Altura Líquido</span><span id="v-altura" class="highlight" style="color:#1a73e8">0.00 m</span></div>
-            <div class="box-edit"><span class="label">Señal Sensor</span><span id="v-cruda-val" class="highlight" style="color:#1a73e8">0.00 g</span></div>
+            <div class="box-edit"><span class="label">ID Tanque (A)</span><span id="v-id" class="value-blue" style="font-weight:bold;">-</span></div>
+            <div class="box-edit"><span class="label">Densidad (B)</span><input id="e-dens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Sensor (C)</span><input id="e-sens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Comunicación (D)</span><input id="e-com" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Estado (E)</span><span id="v-est" style="color:red; font-weight:bold;">-</span></div>
+            <div class="box-edit"><span class="label">Ubicación (F)</span><input id="e-ubic" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Volumen kg (G)</span><span id="v-vol-sheet" style="font-weight:bold; color:#1a73e8;">-</span></div>
+            <div class="box-edit"><span class="label">Capacidad (H)</span><input id="e-cap" class="input-edit" type="text"></div>
         </div>
 
         <div id="display-kg">0.00 kg</div>
+        <div style="text-align:center; margin-bottom:10px;">
+            <span class="label">Altura Actual:</span>
+            <span id="v-altura" class="highlight" style="color:#1a73e8">0.00 m</span>
+        </div>
 
         <button class="btn btn-save" onclick="enviarExcel()">💾 ACTUALIZAR PESO EN EXCEL</button>
         <button class="btn" style="background:#455a64; color:white;" onclick="conectarBLE()">🔗 VINCULAR SENSOR</button>
@@ -106,10 +112,14 @@
         const t = datosExcel[i];
         if(!t) return;
 
-        document.getElementById('c-dens').value = t[1] || "0.85";
+        // Mapeo directo de la hoja de cálculo A-H
+        document.getElementById('v-id').innerText = t[0] || "-";
+        document.getElementById('e-dens').value = t[1] || "0.85";
+        document.getElementById('e-sens').value = t[2] || "1.5";
         document.getElementById('e-com').value = t[3] || "";
         document.getElementById('v-est').innerText = t[4] || "";
         document.getElementById('e-ubic').value = t[5] || "";
+        document.getElementById('v-vol-sheet').innerText = t[6] || "0";
         document.getElementById('e-cap').value = t[7] || "";
 
         const estado = (t[4] || "").toLowerCase();
@@ -135,27 +145,21 @@
         let pulg = parseFloat(document.getElementById('c-tubo').value) || 1.5;
         
         if (kgReal > 0 && deltaG > 0.5) {
-            // Área sensor (m2)
             let areaSens = Math.PI * Math.pow((pulg * 0.0254)/2, 2);
-            // Delta h (m) = (Delta Presión Pa) / (rho * g)
             let deltaPresion = ((deltaG / 1000) * 9.81) / areaSens;
             let deltaH = deltaPresion / (dens * 1000 * 9.81);
-            
-            // Diámetro = 2 * sqrt( VolumenM3 / (PI * h) )
             let volM3 = kgReal / (dens * 1000);
             let diam = 2 * Math.sqrt(volM3 / (Math.PI * deltaH));
-            
             document.getElementById('v-res-diametro').innerText = diam.toFixed(2) + " m";
         }
     }
 
     function actualizarUI() {
         document.getElementById('v-cruda-cal').innerText = pesoActual.toFixed(2);
-        document.getElementById('v-cruda-val').innerText = pesoActual.toFixed(2);
         document.getElementById('v-delta').innerText = (pesoActual - pesoRef).toFixed(2) + " g";
 
-        let dens = parseFloat(document.getElementById('c-dens').value) || 0.85;
-        let pulg = parseFloat(document.getElementById('c-tubo').value) || 1.5;
+        let dens = parseFloat(document.getElementById('e-dens').value) || 0.85;
+        let pulg = parseFloat(document.getElementById('e-sens').value) || 1.5;
         let areaSens = Math.PI * Math.pow((pulg * 0.0254)/2, 2);
         let altura = ((pesoActual / 1000) * 9.81) / (areaSens * dens * 1000 * 9.81);
         
