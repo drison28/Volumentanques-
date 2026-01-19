@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tanque App Pro</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <style>
+        body { font-family: sans-serif; background: #f4f7f6; margin: 0; padding: 20px; text-align: center; color: #333; }
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; margin: 10px 0; transition: 0.3s; }
+        .btn-ble { background: #e67e22; color: white; }
+        .btn-save { background: #27ae60; color: white; }
+        #lectura { font-size: 3em; font-weight: bold; color: #2980b9; margin: 15px 0; }
+        input { width: 80%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; text-align: center; font-size: 16px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h3>📡 Conexión ESP32-S3</h3>
+        <button class="btn btn-ble" onclick="conectarBLE()">🔗 CONECTAR BLUETOOTH</button>
+        <p id="status" style="font-size: 0.8em; color: gray;">Estado: Desconectado</p>
+    </div>
+
+    <div class="card">
+        <h3>📊 Control de Volumen</h3>
+        <div id="lectura">0.00 L</div>
+        <p id="peso" style="color: #666;">Peso: 0 g</p>
+        
+        <div style="margin: 15px 0;">
+            <label>Fila en Google Sheets:</label><br>
+            <input type="number" id="fila" value="2">
+        </div>
+
+        <button class="btn btn-save" id="btnGuardar" onclick="enviarDatos()">💾 GUARDAR EN EXCEL</button>
+    </div>
+
+<script>
+    // Tu URL de Google ya integrada:
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyDEqIGHh6QsofYDoo6skaJKwIYhC892nxh9WsHDbb0ZvP8P5VioAGtnxBaJmZQ47BL/exec";
+    
+    let volCalculado = 0;
+    const AREA_CELDA = 0.00114; 
+
+    async function conectarBLE() {
+        try {
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'TANQUE' }],
+                optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b']
+            });
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+            const char = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+
+            await char.startNotifications();
+            document.getElementById('status').innerText = "Conectado a: " + device.name;
+            document.getElementById('status').style.color = "green";
+
+            char.addEventListener('characteristicvaluechanged', (e) => {
+                const peso = parseFloat(new TextDecoder().decode(e.target.value));
+                document.getElementById('peso').innerText = "Peso: " + peso + " g";
+                
+                // Cálculo (puedes ajustar los valores de densidad aquí si cambian)
+                const d = 1.0; // Diámetro ejemplo
+                const dens = 1.0; // Densidad ejemplo
+                const altura = (peso/1000) / (dens * AREA_CELDA);
+                volCalculado = (Math.PI * Math.pow(d/2, 2) * altura) * 1000;
+                
+                document.getElementById('lectura').innerText = volCalculado.toFixed(2) + " L";
+            });
+        } catch (err) { alert("Error Bluetooth: " + err); }
+    }
+
+    function enviarDatos() {
+        const fila = document.getElementById('fila').value;
+        const btn = document.getElementById('btnGuardar');
+        btn.innerText = "GUARDANDO...";
+        
+        fetch(SCRIPT_URL, {
+            method: "POST",
+            mode: "no-cors", 
+            body: JSON.stringify({ fila: fila, valor: volCalculado.toFixed(2) })
+        }).then(() => {
+            alert("✅ ¡Dato guardado en Google Sheets!");
+            btn.innerText = "💾 GUARDAR EN EXCEL";
+        }).catch(err => alert("Error al guardar: " + err));
+    }
+</script>
+</body>
+</html>
