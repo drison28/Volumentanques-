@@ -2,47 +2,91 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tanque App Pro</title>
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Tanques Pro</title>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; margin: 0; padding: 20px; text-align: center; color: #333; }
-        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; margin: 10px 0; transition: 0.3s; }
-        .btn-ble { background: #e67e22; color: white; }
+        body { font-family: 'Segoe UI', sans-serif; background: #eceff1; margin: 0; padding: 15px; color: #333; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+        select { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; background-color: #fff; }
+        .btn { width: 100%; padding: 15px; border-radius: 8px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-ble { background: #e67e22; color: white; margin-bottom: 10px; }
         .btn-save { background: #27ae60; color: white; }
-        #lectura { font-size: 3em; font-weight: bold; color: #2980b9; margin: 15px 0; }
-        input { width: 80%; padding: 10px; border-radius: 5px; border: 1px solid #ddd; text-align: center; font-size: 16px; }
+        .info-box { background: #e3f2fd; border-left: 5px solid #1e88e5; padding: 15px; margin: 15px 0; text-align: left; border-radius: 4px; }
+        #lectura { font-size: 3em; font-weight: bold; color: #1565c0; margin: 10px 0; }
+        .label-info { font-weight: bold; color: #546e7a; text-transform: uppercase; font-size: 12px; }
+        .value-info { font-size: 18px; color: #263238; margin-bottom: 8px; display: block; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h3>📡 Conexión ESP32-S3</h3>
-        <button class="btn btn-ble" onclick="conectarBLE()">🔗 CONECTAR BLUETOOTH</button>
-        <p id="status" style="font-size: 0.8em; color: gray;">Estado: Desconectado</p>
+        <h3>📡 Dispositivo</h3>
+        <button class="btn btn-ble" onclick="conectarBLE()">🔗 VINCULAR ESP32</button>
+        <div id="status">Estado: ⚪ Desconectado</div>
     </div>
 
     <div class="card">
-        <h3>📊 Control de Volumen</h3>
-        <div id="lectura">0.00 L</div>
-        <p id="peso" style="color: #666;">Peso: 0 g</p>
+        <h3>📋 Selección de Tanque</h3>
+        <label>Escoge un tanque para ver sus datos:</label>
+        <select id="listaTanques" onchange="mostrarInfoTanque()">
+            <option>Cargando lista desde Excel...</option>
+        </select>
         
-        <div style="margin: 15px 0;">
-            <label>Fila en Google Sheets:</label><br>
-            <input type="number" id="fila" value="2">
+        <div id="detalleTanque" class="info-box">
+            <span class="label-info">Nombre del Tanque:</span>
+            <span id="infoNombre" class="value-info">-</span>
+            
+            <span class="label-info">Volumen Actual en Excel:</span>
+            <span id="infoVol" class="value-info">- L</span>
         </div>
+    </div>
 
-        <button class="btn btn-save" id="btnGuardar" onclick="enviarDatos()">💾 GUARDAR EN EXCEL</button>
+    <div class="card">
+        <h3>📊 Nueva Medición (ESP32)</h3>
+        <div id="lectura">0.00 L</div>
+        <p id="peso">Peso sensor: 0 g</p>
+        <button class="btn btn-save" id="btnGuardar" onclick="enviarDatos()">💾 ACTUALIZAR EN EXCEL</button>
     </div>
 
 <script>
-    // Tu URL de Google ya integrada:
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyDEqIGHh6QsofYDoo6skaJKwIYhC892nxh9WsHDbb0ZvP8P5VioAGtnxBaJmZQ47BL/exec";
+    // Tu nueva URL actualizada
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmz7OObrhtbpC7L-HmXGLGBbMJ5hscstEc-Ma7rbaWzoZFzT8lAzOqzgBKyuQYeVfG/exec";
     
+    let datosCompletosExcel = [];
     let volCalculado = 0;
-    const AREA_CELDA = 0.00114; 
+    let pesoActual = 0;
 
+    // 1. CARGAR DATOS AL INICIAR LA APP
+    async function obtenerTanques() {
+        try {
+            const res = await fetch(SCRIPT_URL);
+            datosCompletosExcel = await res.json();
+            let opciones = "";
+            
+            datosCompletosExcel.forEach((fila, index) => {
+                // fila[0] es el nombre (Columna A)
+                opciones += `<option value="${index}">${fila[0]}</option>`;
+            });
+            document.getElementById('listaTanques').innerHTML = opciones;
+            mostrarInfoTanque(); 
+        } catch (e) { 
+            console.error(e);
+            document.getElementById('listaTanques').innerHTML = "<option>Error al conectar con Excel</option>";
+        }
+    }
+
+    // 2. MOSTRAR INFO SEGÚN EL TANQUE SELECCIONADO
+    function mostrarInfoTanque() {
+        const index = document.getElementById('listaTanques').value;
+        if (datosCompletosExcel.length > 0) {
+            const tanque = datosCompletosExcel[index];
+            document.getElementById('infoNombre').innerText = tanque[0]; // Columna A
+            document.getElementById('infoVol').innerText = (tanque[6] || "0") + " L"; // Columna G
+        }
+    }
+
+    // 3. CONECTAR BLUETOOTH CON ESP32
     async function conectarBLE() {
         try {
             const device = await navigator.bluetooth.requestDevice({
@@ -53,39 +97,48 @@
             const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
             const char = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
 
-            await char.startNotifications();
-            document.getElementById('status').innerText = "Conectado a: " + device.name;
-            document.getElementById('status').style.color = "green";
+            document.getElementById('status').innerHTML = "Estado: <span style='color:green'>🟢 Conectado a " + device.name + "</span>";
 
+            await char.startNotifications();
             char.addEventListener('characteristicvaluechanged', (e) => {
-                const peso = parseFloat(new TextDecoder().decode(e.target.value));
-                document.getElementById('peso').innerText = "Peso: " + peso + " g";
+                pesoActual = parseFloat(new TextDecoder().decode(e.target.value));
+                document.getElementById('peso').innerText = "Peso sensor: " + pesoActual + " g";
                 
-                // Cálculo (puedes ajustar los valores de densidad aquí si cambian)
-                const d = 1.0; // Diámetro ejemplo
-                const dens = 1.0; // Densidad ejemplo
-                const altura = (peso/1000) / (dens * AREA_CELDA);
-                volCalculado = (Math.PI * Math.pow(d/2, 2) * altura) * 1000;
-                
+                // --- TU FÓRMULA AQUÍ ---
+                // Ejemplo: 1 gramo = 1.5 Litros (ajústalo a tu tanque)
+                volCalculado = (pesoActual * 1.5); 
                 document.getElementById('lectura').innerText = volCalculado.toFixed(2) + " L";
             });
         } catch (err) { alert("Error Bluetooth: " + err); }
     }
 
+    // 4. GUARDAR CAMBIOS EN LA FILA SELECCIONADA
     function enviarDatos() {
-        const fila = document.getElementById('fila').value;
+        const index = document.getElementById('listaTanques').value;
+        const filaReal = parseInt(index) + 2; // +2 porque Excel empieza en 1 y hay encabezado
         const btn = document.getElementById('btnGuardar');
-        btn.innerText = "GUARDANDO...";
         
+        btn.innerText = "ACTUALIZANDO EXCEL...";
+        btn.disabled = true;
+
         fetch(SCRIPT_URL, {
             method: "POST",
-            mode: "no-cors", 
-            body: JSON.stringify({ fila: fila, valor: volCalculado.toFixed(2) })
+            mode: "no-cors",
+            body: JSON.stringify({ fila: filaReal, valor: volCalculado.toFixed(2) })
         }).then(() => {
-            alert("✅ ¡Dato guardado en Google Sheets!");
-            btn.innerText = "💾 GUARDAR EN EXCEL";
-        }).catch(err => alert("Error al guardar: " + err));
+            alert("✅ ¡Tanque actualizado correctamente!");
+            btn.innerText = "💾 ACTUALIZAR EN EXCEL";
+            btn.disabled = false;
+            obtenerTanques(); // Refresca la lista para mostrar el nuevo valor guardado
+        }).catch(err => {
+            alert("Error al guardar: " + err);
+            btn.disabled = false;
+        });
     }
+
+    // Carga los tanques apenas abre la web
+    window.onload = obtenerTanques;
 </script>
 </body>
 </html>
+
