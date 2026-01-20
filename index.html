@@ -1,297 +1,84 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <title>Balanza ESP32-S3 + Google Sheets</title>
+  <meta charset="UTF-8">
+  <title>Interfaz de Tanques</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #74ebd5, #ACB6E5);
-      text-align: center;
-      margin-top: 40px;
-      margin-bottom: 40px;
-      padding: 0 10px;
-    }
-    .container {
-      display: inline-block;
-      padding: 20px;
-      border: 4px solid #333;
-      border-radius: 15px;
-      background-color: #ffffffcc;
-      box-shadow: 0 0 20px rgba(0,0,0,0.3);
-      margin-bottom: 20px;
-      max-width: 90%;
-    }
-    .box {
-      padding: 15px;
-      border: 2px solid #333;
-      border-radius: 10px;
-      font-size: 1.3em;
-      background-color: #f9f871;
-      margin: 10px 0;
-    }
-    .data-box {
-      padding: 10px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      font-size: 1.1em;
-      background-color: #e8f5e9;
-      margin: 5px 0;
-      text-align: left;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 1em;
-      margin: 10px;
-      border-radius: 8px;
-      background-color: #ff6f61;
-      color: white;
-      border: none;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-    button:hover {
-      background-color: #ff3b2e;
-    }
-    select, input {
-      padding: 8px;
-      font-size: 1em;
-      border-radius: 6px;
-      border: 1px solid #333;
-      margin: 5px;
-      width: 90%;
-      max-width: 300px;
-      text-align: center;
-      background-color: #fff;
-    }
-    h2, h3 {
-      color: #2d3436;
-      margin: 20px 0;
-    }
-    #estadoSheets, #status {
-      font-weight: bold;
-      color: #2d3436;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    button { margin: 5px; padding: 8px 12px; }
+    ul { list-style-type: none; padding: 0; }
+    li { cursor: pointer; margin: 4px 0; padding: 6px; background: #f0f0f0; }
+    li:hover { background: #d0e0ff; }
+    label { display: block; margin: 6px 0; }
+    input { width: 200px; }
+    #detalle { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
-  <h2>Lectura de Tanque vía Bluetooth</h2>
-  <button onclick="connect()">Conectar a ESP32-S3</button>
-  <p id="status">Estado: desconectado</p>
-  
-  <!-- Sección Google Sheets -->
-  <h3>Datos de Tanques (Google Sheets)</h3>
-  <div class="container">
-    <button onclick="leerTanques()">📥 Leer Tanques de la Hoja</button>
-    <select id="tanqueSelect" onchange="mostrarDatosTanque()">
-      <option value="">Selecciona un Tanque</option>
-    </select>
-    <button onclick="guardarDatosTanque()">💾 Guardar Datos Actuales</button>
-    <p id="estadoSheets">Estado Sheets: no cargado</p>
-  </div>
 
-  <!-- Lecturas del ESP32 -->
-  <h3>Lecturas del Dispositivo</h3>
-  <div class="container">
-    <div id="pesoBox" class="box">Peso: -- g</div>
-    <div id="alturaBox" class="box">Altura: -- m</div>
-    <div id="pesoTotalBox" class="box">Peso total: -- N</div>
-  </div>
+  <h2>Gestión de Tanques</h2>
+  <button onclick="verLista()">Ver lista de tanques</button>
+  <div id="lista"></div>
+  <div id="detalle"></div>
 
-  <!-- Datos del Tanque Seleccionado -->
-  <h3>Datos del Tanque Seleccionado</h3>
-  <div class="container" id="tanqueDatosContainer" style="display: none;">
-    <div class="data-box"><strong>Nombre:</strong> <span id="tanqueNombre">--</span></div>
-    <div class="data-box"><strong>Capacidad:</strong> <span id="tanqueCapacidad">--</span> L</div>
-    <div class="data-box"><strong>Diámetro:</strong> <span id="tanqueDiametro">--</span> m</div>
-    <div class="data-box"><strong>Altura máxima:</strong> <span id="tanqueAlturaMax">--</span> m</div>
-    <div class="data-box"><strong>Tipo de líquido:</strong> <span id="tanqueLiquido">--</span></div>
-    <div class="data-box"><strong>Densidad:</strong> <span id="tanqueDensidad">--</span> kg/m³</div>
-    <div class="box"><strong>Volumen actual:</strong> <span id="tanqueVolumenActual">--</span> L</div>
-  </div>
+  <script>
+    // URL de tu Web App en Google Apps Script
+    const url = "https://script.google.com/macros/s/AKfycbzg78gvr2sxCmRJpW14PmLnssqhWzTtRlpJGD2u-Sy12Ehd4byvaEP4h4MkdDgey1Iw/exec";
 
-  <!-- Bloque Manual de Cálculo -->
-  <h3>Gestión de Líquido</h3>
-  <div class="container">
-    <input type="number" id="masaInput" placeholder="Masa a agregar/retirar (kg)" min="0.01" step="0.01">
-    <br>
-    <button onclick="calcularDiametro(true)">➕ Echar Líquido</button>
-    <button onclick="calcularDiametro(false)">➖ Sacar Líquido</button>
-    <div id="diametroManualBox" class="box">Diámetro: Conéctate primero para calcular</div>
-  </div>
+    // Mostrar lista de tanques (columna TK)
+    function verLista() {
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          let html = "<h3>Lista de tanques</h3><ul>";
+          data.forEach(tanque => {
+            html += `<li onclick="verDetalle('${tanque.TK}')">${tanque.TK}</li>`;
+          });
+          html += "</ul>";
+          document.getElementById("lista").innerHTML = html;
+          window.tanques = data; // guardar en memoria
+        })
+        .catch(err => console.error("Error al cargar lista:", err));
+    }
 
-<script>
-// ###########################################################
-// URL DE TU WEB APP DE GOOGLE APPS SCRIPT (AGREGADA COMPLETA)
-const URL_WEB_APP = "https://script.google.com/macros/s/AKfycbwH4Lr2JtXnM8ZkY7XpQ9LbR5TfG2SdF1aH3jK4lO6pI7uY8iU9oP0aS1dF2gH3jK4lO5pI6uY7iU8oP9aS0dF1gH2jK3lO4pI5uY6iU7oP8aS9dF0gH1jK2lO3pI4uY5iU6oP7aS8dF9gH0jK1lO2pI3uY4iU5oP6aS7dF8gH9jK0lO1pI2uY3iU4oP5aS6dF7gH8jK9lO0pI1uY2iU3oP4aS5dF6gH7jK8lO9pI0uY1iU2oP3aS4dF5gH6jK7lO8pI9uY0iU1oP2aS3dF4gH5jK6lO7pI8uY9iU0oP1aS2dF3gH4jK5lO6pI7uY8iU9oP0/exec";
-// ###########################################################
+    // Mostrar detalle de un tanque
+    function verDetalle(nombre) {
+      let tanque = window.tanques.find(t => t.TK === nombre);
+      let html = `
+        <h3>Tanque: ${tanque.TK}</h3>
+        <label>Volumen: <input id="volumen" value="${tanque.VOLUMEN}"></label>
+        <label>Diámetro: <input id="diametro" value="${tanque.DIAMETRO}"></label>
+        <label>Altura: <input id="altura" value="${tanque.ALTURA}"></label>
+        <label>Densidad: <input id="densidad" value="${tanque.DENSIDAD}"></label>
+        <label>Sensor: <input id="sensor" value="${tanque.SENSOR}"></label>
+        <label>Estado: <input id="estado" value="${tanque.ESTADO}"></label>
+        <button onclick="guardar('${tanque.TK}')">Guardar cambios</button>
+      `;
+      document.getElementById("detalle").innerHTML = html;
+    }
 
-// Configuración BLE y cálculos
-const densidadDefault = 900;
-const area = 0.00114;
-const g = 9.81;
-const serviceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-const characteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    // Guardar cambios en Google Sheets
+    function guardar(nombre) {
+      let data = {
+        TK: nombre,
+        VOLUMEN: document.getElementById("volumen").value,
+        DIAMETRO: document.getElementById("diametro").value,
+        ALTURA: document.getElementById("altura").value,
+        DENSIDAD: document.getElementById("densidad").value,
+        SENSOR: document.getElementById("sensor").value,
+        ESTADO: document.getElementById("estado").value
+      };
 
-let ultimaAltura = 0;
-let listaTanques = [];
-let densidadActual = densidadDefault;
-let indiceTanqueSeleccionado = -1;
-
-// --- Conexión con Google Sheets via Web App ---
-async function leerTanques() {
-  document.getElementById("estadoSheets").innerText = "Estado Sheets: cargando datos...";
-  try {
-    const respuesta = await fetch(`${URL_WEB_APP}?accion=obtenerTanques`, {
-      method: "GET",
-      mode: "cors"
-    });
-
-    if (!respuesta.ok) throw new Error("No se pudo conectar con la hoja");
-    listaTanques = await respuesta.json();
-
-    // Actualizar selector de tanques
-    const select = document.getElementById("tanqueSelect");
-    select.innerHTML = "<option value=''>Selecciona un Tanque</option>";
-    listaTanques.forEach((tanque, i) => {
-      const option = document.createElement("option");
-      option.value = i;
-      option.textContent = tanque.nombre;
-      select.appendChild(option);
-    });
-
-    document.getElementById("estadoSheets").innerText = "Estado Sheets: datos cargados correctamente";
-  } catch (error) {
-    console.error("Error al leer tanques:", error);
-    document.getElementById("estadoSheets").innerText = "Estado Sheets: error al cargar datos";
-    alert("Error al cargar datos: " + error.message);
-  }
-}
-
-async function guardarDatosTanque() {
-  if (indiceTanqueSeleccionado === -1) {
-    alert("⚠️ Selecciona un tanque primero");
-    return;
-  }
-
-  const tanque = listaTanques[indiceTanqueSeleccionado];
-  const volumen = document.getElementById("tanqueVolumenActual").textContent;
-
-  try {
-    const respuesta = await fetch(URL_WEB_APP, {
-      method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        accion: "actualizarVolumen",
-        fila: tanque.fila,
-        volumen: volumen
+      fetch(url, {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" }
       })
-    });
+      .then(res => res.text())
+      .then(msg => alert("Guardado: " + msg))
+      .catch(err => console.error("Error al guardar:", err));
+    }
+  </script>
 
-    if (!respuesta.ok) throw new Error("No se pudo guardar los datos");
-    const mensaje = await respuesta.text();
-    alert("✅ " + mensaje);
-    leerTanques(); // Actualizar datos después de guardar
-  } catch (error) {
-    console.error("Error al guardar datos:", error);
-    alert("❌ Error al guardar: " + error.message);
-  }
-}
-
-// --- Funciones BLE y cálculos ---
-async function connect() {
-  try {
-    document.getElementById("status").innerText = "Estado: buscando dispositivo...";
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "TANQUE_001" }],
-      optionalServices: [serviceUuid]
-    });
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(serviceUuid);
-    const characteristic = await service.getCharacteristic(characteristicUuid);
-
-    // Escuchar notificaciones del ESP32
-    await characteristic.startNotifications();
-    characteristic.addEventListener("characteristicvaluechanged", event => {
-      const value = new TextDecoder().decode(event.target.value);
-      const pesoG = parseFloat(value);
-
-      if (isNaN(pesoG)) {
-        document.getElementById("pesoBox").innerText = "Peso: Valor inválido";
-        return;
-      }
-
-      // Actualizar lecturas
-      document.getElementById("pesoBox").innerText = `Peso: ${pesoG.toFixed(1)} g`;
-      const delta_m = pesoG / 1000;
-      const altura = delta_m / (densidadActual * area);
-      ultimaAltura = altura > 0 ? altura : 0;
-
-      const pesoTotal = delta_m * g;
-      document.getElementById("alturaBox").innerText = `Altura: ${altura.toFixed(4)} m`;
-      document.getElementById("pesoTotalBox").innerText = `Peso total: ${pesoTotal.toFixed(2)} N`;
-      document.getElementById("diametroManualBox").innerText = "Diámetro: Ingresa masa para calcular";
-
-      // Actualizar volumen si hay un tanque seleccionado
-      if (indiceTanqueSeleccionado !== -1) {
-        const diametro = parseFloat(document.getElementById("tanqueDiametro").textContent);
-        const volumenActual = (altura * Math.PI * Math.pow(diametro, 2) / 4) * 1000;
-        document.getElementById("tanqueVolumenActual").textContent = volumenActual.toFixed(2);
-      }
-    });
-
-    document.getElementById("status").innerText = `Estado: conectado a ${device.name || "TANQUE_001"}`;
-  } catch (error) {
-    document.getElementById("status").innerText = `Estado: error - ${error.message}`;
-    console.error("Error en conexión BLE:", error);
-  }
-}
-
-function mostrarDatosTanque() {
-  indiceTanqueSeleccionado = parseInt(document.getElementById("tanqueSelect").value);
-  if (isNaN(indiceTanqueSeleccionado) || indiceTanqueSeleccionado < 0) {
-    document.getElementById("tanqueDatosContainer").style.display = "none";
-    densidadActual = densidadDefault;
-    indiceTanqueSeleccionado = -1;
-    return;
-  }
-
-  const tanque = listaTanques[indiceTanqueSeleccionado];
-  document.getElementById("tanqueNombre").textContent = tanque.nombre;
-  document.getElementById("tanqueCapacidad").textContent = tanque.capacidad;
-  document.getElementById("tanqueDiametro").textContent = tanque.diametro;
-  document.getElementById("tanqueAlturaMax").textContent = tanque.alturaMax;
-  document.getElementById("tanqueLiquido").textContent = tanque.liquido;
-  document.getElementById("tanqueDensidad").textContent = tanque.densidad;
-  document.getElementById("tanqueVolumenActual").textContent = tanque.volumenActual;
-
-  densidadActual = parseFloat(tanque.densidad) || densidadDefault;
-  document.getElementById("tanqueDatosContainer").style.display = "inline-block";
-}
-
-function calcularDiametro(esEchar) {
-  const masaInput = parseFloat(document.getElementById("masaInput").value);
-  if (isNaN(masaInput) || masaInput <= 0) {
-    alert("⚠️ Ingresa una masa válida mayor a 0 kg");
-    return;
-  }
-  if (ultimaAltura <= 0) {
-    alert("⚠️ Primero conecta el ESP32 y obtén una lectura de altura válida");
-    return;
-  }
-
-  const masa_total = esEchar ? masaInput : -masaInput;
-  if (masa_total < 0 && (-masa_total / densidadActual) > (densidadActual * area * ultimaAltura)) {
-    alert("⚠️ La masa a retirar no puede ser mayor al volumen actual del tanque");
-    return;
-  }
-
-  const volumen = Math.abs(masa_total) / densidadActual;
-  const diametro = Math.sqrt((4 * volumen) / (Math.PI * ultimaAltura));
-  document.getElementById("diametroManualBox").innerText = `Diámetro: ${diametro.toFixed(4)} m`;
-}
-</script>
 </body>
 </html>
