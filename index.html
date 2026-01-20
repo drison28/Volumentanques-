@@ -3,117 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Ingeniería - Tanques</title>
+    <title>Ingeniería de Tanques - Control de Datos</title>
     <style>
-        :root { --blue: #1a73e8; --orange: #f57c00; --green: #2e7d32; }
-        body { font-family: sans-serif; background: #eef2f7; padding: 10px; margin: 0; }
-        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 6px solid var(--blue); }
-        .card-calib { border-top-color: var(--orange); }
-        h3 { text-align: center; color: var(--blue); font-size: 14px; margin: 0 0 15px 0; text-transform: uppercase; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .input-group { background: #f8f9fa; border: 1px solid #ddd; padding: 8px; border-radius: 8px; }
-        .label { display: block; font-size: 10px; color: #777; font-weight: bold; margin-bottom: 4px; }
-        input { width: 100%; border: none; background: transparent; font-weight: bold; color: var(--blue); outline: none; font-size: 14px; }
-        select { width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--blue); margin-bottom: 15px; font-weight: bold; }
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; margin-top: 10px; }
-        .btn-save { background: var(--green); }
-        .btn-calib { background: var(--orange); }
-        #status { text-align: center; font-weight: bold; font-size: 12px; margin-bottom: 10px; padding: 5px; border-radius: 5px; }
-        #display-kg { font-size: 40px; text-align: center; font-weight: bold; color: var(--blue); margin: 15px 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
+        .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 15px; border-top: 5px solid #1a73e8; }
+        .card-calib { border-top: 5px solid #ef6c00; background: #fffaf5; position: relative; }
+        .locked { opacity: 0.6; pointer-events: none; filter: grayscale(0.8); }
+        .lock-overlay { position: absolute; top:0; left:0; width:100%; height:100%; display:none; align-items:center; justify-content:center; background: rgba(255,255,255,0.7); z-index: 10; font-weight: bold; color: #d32f2f; border-radius: 12px; }
+        
+        h3 { margin: 0 0 10px 0; font-size: 0.9em; text-align: center; text-transform: uppercase; }
+        .grid-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .box-edit { background: #f8f9fa; border: 1px solid #ddd; padding: 5px 8px; border-radius: 8px; }
+        .label { font-size: 0.65em; color: #666; font-weight: bold; text-transform: uppercase; display: block; }
+        .input-edit { width: 100%; border: none; background: transparent; color: #1a73e8; font-weight: bold; font-size: 14px; padding: 2px 0; outline: none; }
+        
+        select, .input-full { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; margin-bottom: 10px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+        .btn-save { background: #2e7d32; color: white; }
+        .btn-freeze { background: #ef6c00; color: white; }
+        
+        #display-kg { font-size: 3em; font-weight: bold; text-align: center; color: #1a73e8; margin: 10px 0; }
+        .highlight { color: #d84315; font-weight: bold; font-size: 1.2em; }
     </style>
 </head>
 <body>
 
-    <div id="status" style="background: #ffcdd2; color: #b71c1c;">🔴 DESCONECTADO (Revisa URL)</div>
-
-    <div class="card card-calib">
-        <h3>Calibración</h3>
-        <button class="btn btn-calib" onclick="fijarReferencia()">❄️ FIJAR CERO / TARA</button>
-        <div style="text-align:center; margin-top:10px;">
-            <span class="label">Diferencia de Señal</span>
-            <span id="delta-txt" style="font-size:20px; font-weight:bold;">0.00 g</span>
+    <div class="card card-calib" id="panelCalib">
+        <div id="lockMsg" class="lock-overlay">🔒 TANQUE YA CALIBRADO</div>
+        <h3>⚙️ ESTACIÓN DE CALIBRACIÓN</h3>
+        <div class="grid-datos">
+            <div class="box-edit"><span class="label">Producto</span><input id="c-prod" class="input-edit" type="text" value="DIESEL"></div>
+            <div class="box-edit"><span class="label">Señal Columna (g)</span><span id="v-cruda-cal" class="highlight">0.00</span></div>
+        </div>
+        <button class="btn btn-freeze" onclick="iniciarCalibracion()">❄️ CONGELAR SEÑAL INICIAL</button>
+        <div id="zonaPasos" style="text-align:center; margin-top:10px; padding:10px; background:#ffe0b2; border-radius:8px;">
+            <span class="label">Diferencia (Δ)</span>
+            <span id="v-delta" style="font-size:1.8em; font-weight:bold; color:#bf360c;">0.00 g</span>
+            <input type="number" id="kg-movidos" class="input-full" placeholder="Kg reales movidos" oninput="calcularDiametro()" style="margin-top:10px;">
+            <span class="label">Diámetro Calculado:</span>
+            <span id="v-res-diametro" style="font-weight:bold; color:#2e7d32;">0.00 m</span>
         </div>
     </div>
 
     <div class="card">
-        <h3>Datos del Tanque</h3>
-        <select id="selector" onchange="cargarFila()"><option>Buscando tanques...</option></select>
+        <h3>📋 DATOS DEL TANQUE</h3>
+        <select id="listaTanques" onchange="cambiarTanque()" style="border: 2px solid #1a73e8;">
+            <option>Cargando tanques...</option>
+        </select>
         
-        <div class="grid">
-            <div class="input-group"><span class="label">ID (A)</span><input id="v1" type="text"></div>
-            <div class="input-group"><span class="label">VOL (B)</span><input id="v2" type="text"></div>
-            <div class="input-group"><span class="label">DIAM (C)</span><input id="v3" type="text"></div>
-            <div class="input-group"><span class="label">ALT (D)</span><input id="v4" type="text"></div>
-            <div class="input-group"><span class="label">DENS (E)</span><input id="v5" type="text"></div>
-            <div class="input-group"><span class="label">SENS (F)</span><input id="v6" type="text"></div>
-            <div class="input-group"><span class="label">COM (G)</span><input id="v7" type="text"></div>
-            <div class="input-group"><span class="label">ESTADO (H)</span><input id="v8" type="text"></div>
+        <div class="grid-datos">
+            <div class="box-edit"><span class="label">ID Tanque (A)</span><input id="e-id" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Densidad (B)</span><input id="e-dens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Sensor (C)</span><input id="e-sens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Comunicación (D)</span><input id="e-com" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Estado (E)</span><input id="e-est" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Ubicación (F)</span><input id="e-ubic" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Volumen kg (G)</span><input id="e-vol" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">Capacidad (H)</span><input id="e-cap" class="input-edit" type="text"></div>
         </div>
 
         <div id="display-kg">0.00 kg</div>
+        <div style="text-align:center;"><span class="label">Altura:</span> <span id="v-altura" class="highlight">0.00 m</span></div>
 
-        <button class="btn btn-save" onclick="guardar()">💾 GUARDAR CAMBIOS</button>
-        <button class="btn" style="background:#546e7a" onclick="conectarBLE()">🔗 CONECTAR SENSOR</button>
+        <button class="btn btn-save" onclick="enviarExcel()">💾 GUARDAR CAMBIOS EN HOJA</button>
+        <button class="btn" style="background:#455a64; color:white;" onclick="conectarBLE()">🔗 VINCULAR SENSOR</button>
     </div>
 
 <script>
-    // PEGA AQUÍ TU URL
-    const URL = "https://script.google.com/macros/s/AKfycbwYy1e5eL6P7rEay4U1X99pY7tY6E17_E58899808386348634/exec"; 
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwrFaJIkebV9PmlyLmefrH5rLffGoQo_xDSJCu2TaAsLHXtWSulgrGKBFhQ3UMQd2z3/exec";
+    let pesoActual = 0, pesoRef = 0, datosExcel = [];
 
-    let datos = [], peso = 0, tara = 0;
-
-    async function init() {
-        const s = document.getElementById('status');
-        try {
-            const r = await fetch(URL);
-            datos = await r.json();
-            let h = "";
-            datos.forEach((f, i) => h += `<option value="${i}">${f[0] || 'Fila '+(i+1)}</option>`);
-            document.getElementById('selector').innerHTML = h;
-            s.innerText = "🟢 CONECTADO CON ÉXITO";
-            s.style.background = "#c8e6c9"; s.style.color = "#1b5e20";
-            cargarFila();
-        } catch(e) { 
-            s.innerText = "🔴 ERROR DE CONEXIÓN"; 
-        }
+    async function cargarTanques() {
+        const r = await fetch(SCRIPT_URL);
+        datosExcel = await r.json();
+        let html = "";
+        datosExcel.forEach((f, i) => { html += `<option value="${i}">${f[0]}</option>`; });
+        document.getElementById('listaTanques').innerHTML = html;
+        cambiarTanque();
     }
 
-    function cargarFila() {
-        let i = document.getElementById('selector').value;
-        let t = datos[i];
-        for(let j=1; j<=8; j++) document.getElementById('v'+j).value = t[j-1] || "";
+    function cambiarTanque() {
+        const i = document.getElementById('listaTanques').value;
+        const t = datosExcel[i];
+        if(!t) return;
+        
+        // Mapeo 1 a 1 con las columnas A-H de tu hoja
+        document.getElementById('e-id').value = t[0] || "";
+        document.getElementById('e-dens').value = t[1] || "";
+        document.getElementById('e-sens').value = t[2] || "";
+        document.getElementById('e-com').value = t[3] || "";
+        document.getElementById('e-est').value = t[4] || "";
+        document.getElementById('e-ubic').value = t[5] || "";
+        document.getElementById('e-vol').value = t[6] || "";
+        document.getElementById('e-cap').value = t[7] || "";
+
+        const estado = (t[4] || "").toLowerCase();
+        document.getElementById('panelCalib').classList.toggle('locked', estado === "calibrado");
+        document.getElementById('lockMsg').style.display = (estado === "calibrado") ? 'flex' : 'none';
+        actualizarUI();
     }
 
-    async function guardar() {
-        let i = document.getElementById('selector').value;
-        let payload = {
-            fila: parseInt(i) + 2,
-            datos: []
-        };
-        for(let j=1; j<=8; j++) payload.datos.push(document.getElementById('v'+j).value);
+    function iniciarCalibracion() { pesoRef = pesoActual; }
 
-        alert("Enviando...");
-        await fetch(URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
-        alert("✅ Guardado en Google Sheets");
+    function actualizarUI() {
+        document.getElementById('v-cruda-cal').innerText = pesoActual.toFixed(2);
+        document.getElementById('v-delta').innerText = (pesoActual - pesoRef).toFixed(2) + " g";
+        
+        let dens = parseFloat(document.getElementById('e-dens').value) || 0.85;
+        let sensorSize = parseFloat(document.getElementById('e-sens').value) || 1.5;
+        let area = Math.PI * Math.pow((sensorSize * 0.0254)/2, 2);
+        let altura = ((pesoActual / 1000) * 9.81) / (area * dens * 1000 * 9.81);
+        
+        document.getElementById('v-altura').innerText = altura.toFixed(2) + " m";
+        let pesoCalc = (pesoActual * 1.5).toFixed(2);
+        document.getElementById('display-kg').innerText = pesoCalc + " kg";
+        // Opcional: actualizar el campo de volumen con el dato en vivo
+        document.getElementById('e-vol').value = pesoCalc;
     }
 
     async function conectarBLE() {
-        try {
-            const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'TANQUE' }], optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b'] });
-            const srv = await dev.gatt.connect();
-            const sc = await srv.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
-            const ch = await sc.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
-            await ch.startNotifications();
-            ch.addEventListener('characteristicvaluechanged', (e) => {
-                peso = parseFloat(new TextDecoder().decode(e.target.value));
-                document.getElementById('display-kg').innerText = (peso * 1.5).toFixed(2) + " kg";
-                document.getElementById('delta-txt').innerText = (peso - tara).toFixed(2) + " g";
-            });
-        } catch(e) { alert("Error BLE: " + e); }
+        const device = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'TANQUE' }], optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b'] });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+        const char = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+        await char.startNotifications();
+        char.addEventListener('characteristicvaluechanged', (e) => {
+            pesoActual = parseFloat(new TextDecoder().decode(e.target.value));
+            actualizarUI();
+        });
     }
 
-    function fijarReferencia() { tara = peso; alert("Tara fijada"); }
-    window.onload = init;
+    function enviarExcel() {
+        const i = document.getElementById('listaTanques').value;
+        const payload = {
+            fila: parseInt(i) + 2,
+            // Enviamos un objeto con todos los campos para que tu Script los procese
+            datos: [
+                document.getElementById('e-id').value,
+                document.getElementById('e-dens').value,
+                document.getElementById('e-sens').value,
+                document.getElementById('e-com').value,
+                document.getElementById('e-est').value,
+                document.getElementById('e-ubic').value,
+                document.getElementById('e-vol').value,
+                document.getElementById('e-cap').value
+            ]
+        };
+        fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) })
+        .then(() => alert("✅ Hoja actualizada con éxito"));
+    }
+
+    window.onload = cargarTanques;
 </script>
 </body>
 </html>
