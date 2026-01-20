@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Interfaz de Tanques</title>
+  <title>Interfaz ESP32 + Google Sheets</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     button { margin: 5px; padding: 8px 12px; }
@@ -16,18 +16,64 @@
 </head>
 <body>
 
-  <h2>Gestión de Tanques</h2>
+  <h2>Gestión de Tanques con ESP32-S3</h2>
+
+  <!-- Botón para conectar Bluetooth -->
+  <button onclick="conectarBluetooth()">Conectar ESP32-S3</button>
+  <p id="estadoBT">Estado Bluetooth: Desconectado</p>
+  <p>Última señal transmisor: <span id="senal"></span></p>
+
+  <!-- Bloque de Google Sheets -->
   <button onclick="verLista()">Ver lista de tanques</button>
   <div id="lista"></div>
   <div id="detalle"></div>
 
   <script>
     // URL de tu Web App en Google Apps Script
-    const url = "https://script.google.com/macros/s/AKfycbzg78gvr2sxCmRJpW14PmLnssqhWzTtRlpJGD2u-Sy12Ehd4byvaEP4h4MkdDgey1Iw/exec";
+    const urlSheets = "https://script.google.com/macros/s/AKfycbzg78gvr2sxCmRJpW14PmLnssqhWzTtRlpJGD2u-Sy12Ehd4byvaEP4h4MkdDgey1Iw/exec";
 
-    // Mostrar lista de tanques (columna TK)
+    // -------------------------------
+    // BLOQUE A: Bluetooth ESP32-S3
+    // -------------------------------
+    let dispositivoBT;
+    let caracteristica;
+
+    async function conectarBluetooth() {
+      try {
+        dispositivoBT = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['battery_service'] // cambia por tu UUID si lo tienes
+        });
+        const server = await dispositivoBT.gatt.connect();
+        document.getElementById("estadoBT").innerText = "Estado Bluetooth: Conectado";
+
+        // Ejemplo: leer característica
+        const service = await server.getPrimaryService('battery_service');
+        caracteristica = await service.getCharacteristic('battery_level');
+
+        caracteristica.startNotifications();
+        caracteristica.addEventListener('characteristicvaluechanged', manejarDatos);
+
+      } catch (error) {
+        console.error("Error Bluetooth:", error);
+      }
+    }
+
+    function manejarDatos(event) {
+      let valor = event.target.value.getUint8(0); // ejemplo simple
+      document.getElementById("senal").innerText = valor;
+      // Opcional: actualizar automáticamente SENSOR/ESTADO del tanque seleccionado
+      if (document.getElementById("sensor")) {
+        document.getElementById("sensor").value = valor;
+        document.getElementById("estado").value = "Activo";
+      }
+    }
+
+    // -------------------------------
+    // BLOQUE B: Google Sheets
+    // -------------------------------
     function verLista() {
-      fetch(url)
+      fetch(urlSheets)
         .then(res => res.json())
         .then(data => {
           let html = "<h3>Lista de tanques</h3><ul>";
@@ -36,12 +82,11 @@
           });
           html += "</ul>";
           document.getElementById("lista").innerHTML = html;
-          window.tanques = data; // guardar en memoria
+          window.tanques = data;
         })
         .catch(err => console.error("Error al cargar lista:", err));
     }
 
-    // Mostrar detalle de un tanque
     function verDetalle(nombre) {
       let tanque = window.tanques.find(t => t.TK === nombre);
       let html = `
@@ -57,7 +102,6 @@
       document.getElementById("detalle").innerHTML = html;
     }
 
-    // Guardar cambios en Google Sheets
     function guardar(nombre) {
       let data = {
         TK: nombre,
@@ -69,7 +113,7 @@
         ESTADO: document.getElementById("estado").value
       };
 
-      fetch(url, {
+      fetch(urlSheets, {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" }
