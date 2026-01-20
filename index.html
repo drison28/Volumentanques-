@@ -1,128 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Interfaz ESP32 + Google Sheets</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    button { margin: 5px; padding: 8px 12px; }
-    ul { list-style-type: none; padding: 0; }
-    li { cursor: pointer; margin: 4px 0; padding: 6px; background: #f0f0f0; }
-    li:hover { background: #d0e0ff; }
-    label { display: block; margin: 6px 0; }
-    input { width: 200px; }
-    #detalle { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Ingeniería - Tanques</title>
+    <style>
+        :root { --blue: #1a73e8; --orange: #f57c00; --green: #2e7d32; }
+        body { font-family: sans-serif; background: #eef2f7; padding: 10px; margin: 0; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 6px solid var(--blue); }
+        .card-calib { border-top-color: var(--orange); }
+        h3 { text-align: center; color: var(--blue); font-size: 14px; margin: 0 0 15px 0; text-transform: uppercase; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .input-group { background: #f8f9fa; border: 1px solid #ddd; padding: 8px; border-radius: 8px; }
+        .label { display: block; font-size: 10px; color: #777; font-weight: bold; margin-bottom: 4px; }
+        input { width: 100%; border: none; background: transparent; font-weight: bold; color: var(--blue); outline: none; font-size: 14px; }
+        select { width: 100%; padding: 12px; border-radius: 8px; border: 2px solid var(--blue); margin-bottom: 15px; font-weight: bold; }
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; margin-top: 10px; }
+        .btn-save { background: var(--green); }
+        .btn-calib { background: var(--orange); }
+        #status { text-align: center; font-weight: bold; font-size: 12px; margin-bottom: 10px; padding: 5px; border-radius: 5px; }
+        #display-kg { font-size: 40px; text-align: center; font-weight: bold; color: var(--blue); margin: 15px 0; }
+    </style>
 </head>
 <body>
 
-  <h2>Gestión de Tanques con ESP32-S3</h2>
+    <div id="status" style="background: #ffcdd2; color: #b71c1c;">🔴 DESCONECTADO (Revisa URL)</div>
 
-  <!-- Botón para conectar Bluetooth -->
-  <button onclick="conectarBluetooth()">Conectar ESP32-S3</button>
-  <p id="estadoBT">Estado Bluetooth: Desconectado</p>
-  <p>Última señal transmisor: <span id="senal"></span></p>
+    <div class="card card-calib">
+        <h3>Calibración</h3>
+        <button class="btn btn-calib" onclick="fijarReferencia()">❄️ FIJAR CERO / TARA</button>
+        <div style="text-align:center; margin-top:10px;">
+            <span class="label">Diferencia de Señal</span>
+            <span id="delta-txt" style="font-size:20px; font-weight:bold;">0.00 g</span>
+        </div>
+    </div>
 
-  <!-- Bloque de Google Sheets -->
-  <button onclick="verLista()">Ver lista de tanques</button>
-  <div id="lista"></div>
-  <div id="detalle"></div>
+    <div class="card">
+        <h3>Datos del Tanque</h3>
+        <select id="selector" onchange="cargarFila()"><option>Buscando tanques...</option></select>
+        
+        <div class="grid">
+            <div class="input-group"><span class="label">ID (A)</span><input id="v1" type="text"></div>
+            <div class="input-group"><span class="label">VOL (B)</span><input id="v2" type="text"></div>
+            <div class="input-group"><span class="label">DIAM (C)</span><input id="v3" type="text"></div>
+            <div class="input-group"><span class="label">ALT (D)</span><input id="v4" type="text"></div>
+            <div class="input-group"><span class="label">DENS (E)</span><input id="v5" type="text"></div>
+            <div class="input-group"><span class="label">SENS (F)</span><input id="v6" type="text"></div>
+            <div class="input-group"><span class="label">COM (G)</span><input id="v7" type="text"></div>
+            <div class="input-group"><span class="label">ESTADO (H)</span><input id="v8" type="text"></div>
+        </div>
 
-  <script>
-    // URL de tu Web App en Google Apps Script
-    const urlSheets = "https://script.google.com/macros/s/AKfycbzg78gvr2sxCmRJpW14PmLnssqhWzTtRlpJGD2u-Sy12Ehd4byvaEP4h4MkdDgey1Iw/exec";
+        <div id="display-kg">0.00 kg</div>
 
-    // -------------------------------
-    // BLOQUE A: Bluetooth ESP32-S3
-    // -------------------------------
-    let dispositivoBT;
-    let caracteristica;
+        <button class="btn btn-save" onclick="guardar()">💾 GUARDAR CAMBIOS</button>
+        <button class="btn" style="background:#546e7a" onclick="conectarBLE()">🔗 CONECTAR SENSOR</button>
+    </div>
 
-    async function conectarBluetooth() {
-      try {
-        dispositivoBT = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: ['battery_service'] // cambia por tu UUID si lo tienes
-        });
-        const server = await dispositivoBT.gatt.connect();
-        document.getElementById("estadoBT").innerText = "Estado Bluetooth: Conectado";
+<script>
+    // PEGA AQUÍ TU URL
+    const URL = "https://script.google.com/macros/s/AKfycbwYy1e5eL6P7rEay4U1X99pY7tY6E17_E58899808386348634/exec"; 
 
-        // Ejemplo: leer característica
-        const service = await server.getPrimaryService('battery_service');
-        caracteristica = await service.getCharacteristic('battery_level');
+    let datos = [], peso = 0, tara = 0;
 
-        caracteristica.startNotifications();
-        caracteristica.addEventListener('characteristicvaluechanged', manejarDatos);
-
-      } catch (error) {
-        console.error("Error Bluetooth:", error);
-      }
+    async function init() {
+        const s = document.getElementById('status');
+        try {
+            const r = await fetch(URL);
+            datos = await r.json();
+            let h = "";
+            datos.forEach((f, i) => h += `<option value="${i}">${f[0] || 'Fila '+(i+1)}</option>`);
+            document.getElementById('selector').innerHTML = h;
+            s.innerText = "🟢 CONECTADO CON ÉXITO";
+            s.style.background = "#c8e6c9"; s.style.color = "#1b5e20";
+            cargarFila();
+        } catch(e) { 
+            s.innerText = "🔴 ERROR DE CONEXIÓN"; 
+        }
     }
 
-    function manejarDatos(event) {
-      let valor = event.target.value.getUint8(0); // ejemplo simple
-      document.getElementById("senal").innerText = valor;
-      // Opcional: actualizar automáticamente SENSOR/ESTADO del tanque seleccionado
-      if (document.getElementById("sensor")) {
-        document.getElementById("sensor").value = valor;
-        document.getElementById("estado").value = "Activo";
-      }
+    function cargarFila() {
+        let i = document.getElementById('selector').value;
+        let t = datos[i];
+        for(let j=1; j<=8; j++) document.getElementById('v'+j).value = t[j-1] || "";
     }
 
-    // -------------------------------
-    // BLOQUE B: Google Sheets
-    // -------------------------------
-    function verLista() {
-      fetch(urlSheets)
-        .then(res => res.json())
-        .then(data => {
-          let html = "<h3>Lista de tanques</h3><ul>";
-          data.forEach(tanque => {
-            html += `<li onclick="verDetalle('${tanque.TK}')">${tanque.TK}</li>`;
-          });
-          html += "</ul>";
-          document.getElementById("lista").innerHTML = html;
-          window.tanques = data;
-        })
-        .catch(err => console.error("Error al cargar lista:", err));
+    async function guardar() {
+        let i = document.getElementById('selector').value;
+        let payload = {
+            fila: parseInt(i) + 2,
+            datos: []
+        };
+        for(let j=1; j<=8; j++) payload.datos.push(document.getElementById('v'+j).value);
+
+        alert("Enviando...");
+        await fetch(URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
+        alert("✅ Guardado en Google Sheets");
     }
 
-    function verDetalle(nombre) {
-      let tanque = window.tanques.find(t => t.TK === nombre);
-      let html = `
-        <h3>Tanque: ${tanque.TK}</h3>
-        <label>Volumen: <input id="volumen" value="${tanque.VOLUMEN}"></label>
-        <label>Diámetro: <input id="diametro" value="${tanque.DIAMETRO}"></label>
-        <label>Altura: <input id="altura" value="${tanque.ALTURA}"></label>
-        <label>Densidad: <input id="densidad" value="${tanque.DENSIDAD}"></label>
-        <label>Sensor: <input id="sensor" value="${tanque.SENSOR}"></label>
-        <label>Estado: <input id="estado" value="${tanque.ESTADO}"></label>
-        <button onclick="guardar('${tanque.TK}')">Guardar cambios</button>
-      `;
-      document.getElementById("detalle").innerHTML = html;
+    async function conectarBLE() {
+        try {
+            const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'TANQUE' }], optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b'] });
+            const srv = await dev.gatt.connect();
+            const sc = await srv.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+            const ch = await sc.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+            await ch.startNotifications();
+            ch.addEventListener('characteristicvaluechanged', (e) => {
+                peso = parseFloat(new TextDecoder().decode(e.target.value));
+                document.getElementById('display-kg').innerText = (peso * 1.5).toFixed(2) + " kg";
+                document.getElementById('delta-txt').innerText = (peso - tara).toFixed(2) + " g";
+            });
+        } catch(e) { alert("Error BLE: " + e); }
     }
 
-    function guardar(nombre) {
-      let data = {
-        TK: nombre,
-        VOLUMEN: document.getElementById("volumen").value,
-        DIAMETRO: document.getElementById("diametro").value,
-        ALTURA: document.getElementById("altura").value,
-        DENSIDAD: document.getElementById("densidad").value,
-        SENSOR: document.getElementById("sensor").value,
-        ESTADO: document.getElementById("estado").value
-      };
-
-      fetch(urlSheets, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" }
-      })
-      .then(res => res.text())
-      .then(msg => alert("Guardado: " + msg))
-      .catch(err => console.error("Error al guardar:", err));
-    }
-  </script>
-
+    function fijarReferencia() { tara = peso; alert("Tara fijada"); }
+    window.onload = init;
+</script>
 </body>
 </html>
