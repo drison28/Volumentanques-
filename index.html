@@ -3,122 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ingeniería de Tanques - Control de Datos</title>
+    <title>Ingeniería de Tanques - Sincronizado</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
         .card { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 15px; border-top: 5px solid #1a73e8; }
         .card-calib { border-top: 5px solid #ef6c00; background: #fffaf5; position: relative; }
         .locked { opacity: 0.6; pointer-events: none; filter: grayscale(0.8); }
         .lock-overlay { position: absolute; top:0; left:0; width:100%; height:100%; display:none; align-items:center; justify-content:center; background: rgba(255,255,255,0.7); z-index: 10; font-weight: bold; color: #d32f2f; border-radius: 12px; }
-        
-        h3 { margin: 0 0 10px 0; font-size: 0.9em; text-align: center; text-transform: uppercase; }
+        h3 { margin: 0 0 10px 0; font-size: 0.9em; text-align: center; text-transform: uppercase; color: #1a73e8; }
         .grid-datos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
         .box-edit { background: #f8f9fa; border: 1px solid #ddd; padding: 5px 8px; border-radius: 8px; }
         .label { font-size: 0.65em; color: #666; font-weight: bold; text-transform: uppercase; display: block; }
         .input-edit { width: 100%; border: none; background: transparent; color: #1a73e8; font-weight: bold; font-size: 14px; padding: 2px 0; outline: none; }
-        
-        select, .input-full { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; margin-bottom: 10px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 8px; }
+        select, .input-full { width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #1a73e8; font-size: 16px; margin-bottom: 10px; box-sizing: border-box; font-weight: bold; }
+        .btn { width: 100%; padding: 15px; border-radius: 10px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .btn-save { background: #2e7d32; color: white; }
         .btn-freeze { background: #ef6c00; color: white; }
-        
-        #display-kg { font-size: 3em; font-weight: bold; text-align: center; color: #1a73e8; margin: 10px 0; }
-        .highlight { color: #d84315; font-weight: bold; font-size: 1.2em; }
+        #display-kg { font-size: 3.5em; font-weight: bold; text-align: center; color: #1a73e8; margin: 10px 0; }
+        .delta-box { text-align: center; padding: 12px; background: #ffe0b2; border-radius: 8px; border: 2px dashed #fb8c00; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="card card-calib" id="panelCalib">
-        <div id="lockMsg" class="lock-overlay">🔒 TANQUE YA CALIBRADO</div>
-        <h3>⚙️ ESTACIÓN DE CALIBRACIÓN</h3>
-        <div class="grid-datos">
-            <div class="box-edit"><span class="label">Producto</span><input id="c-prod" class="input-edit" type="text" value="DIESEL"></div>
-            <div class="box-edit"><span class="label">Señal Columna (g)</span><span id="v-cruda-cal" class="highlight">0.00</span></div>
-        </div>
+        <div id="lockMsg" class="lock-overlay">🔒 CALIBRADO - LECTURA FIJA</div>
+        <h3>⚙️ CALIBRACIÓN DE INGENIERÍA</h3>
         <button class="btn btn-freeze" onclick="iniciarCalibracion()">❄️ CONGELAR SEÑAL INICIAL</button>
-        <div id="zonaPasos" style="text-align:center; margin-top:10px; padding:10px; background:#ffe0b2; border-radius:8px;">
+        <div class="delta-box">
             <span class="label">Diferencia (Δ)</span>
             <span id="v-delta" style="font-size:1.8em; font-weight:bold; color:#bf360c;">0.00 g</span>
-            <input type="number" id="kg-movidos" class="input-full" placeholder="Kg reales movidos" oninput="calcularDiametro()" style="margin-top:10px;">
+            <input type="number" id="kg-movidos" class="input-full" placeholder="Kg reales movidos" oninput="calcularDiametro()" style="margin-top:10px; background: white;">
             <span class="label">Diámetro Calculado:</span>
-            <span id="v-res-diametro" style="font-weight:bold; color:#2e7d32;">0.00 m</span>
+            <span id="v-res-diametro" style="font-size:1.4em; font-weight:bold; color:#2e7d32;">0.00 m</span>
         </div>
     </div>
 
     <div class="card">
         <h3>📋 DATOS DEL TANQUE</h3>
-        <select id="listaTanques" onchange="cambiarTanque()" style="border: 2px solid #1a73e8;">
+        <select id="listaTanques" onchange="cambiarTanque()">
             <option>Cargando tanques...</option>
         </select>
         
         <div class="grid-datos">
-            <div class="box-edit"><span class="label">ID Tanque (A)</span><input id="e-id" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Densidad (B)</span><input id="e-dens" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Sensor (C)</span><input id="e-sens" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Comunicación (D)</span><input id="e-com" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Estado (E)</span><input id="e-est" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Ubicación (F)</span><input id="e-ubic" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Volumen kg (G)</span><input id="e-vol" class="input-edit" type="text"></div>
-            <div class="box-edit"><span class="label">Capacidad (H)</span><input id="e-cap" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">TK / ID (A)</span><input id="e-id" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">VOLUMEN (B)</span><input id="e-vol" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">DIÁMETRO (C)</span><input id="e-diam" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">ALTURA (D)</span><input id="e-alt" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">DENSIDAD (E)</span><input id="e-dens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">SENSOR (F)</span><input id="e-sens" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">COMUNICACIÓN (G)</span><input id="e-com" class="input-edit" type="text"></div>
+            <div class="box-edit"><span class="label">ESTADO (H)</span><input id="e-est" class="input-edit" type="text"></div>
         </div>
 
         <div id="display-kg">0.00 kg</div>
-        <div style="text-align:center;"><span class="label">Altura:</span> <span id="v-altura" class="highlight">0.00 m</span></div>
+        <div style="text-align:center; margin-bottom: 10px;"><span class="label">Altura Real Detectada:</span><span id="v-altura-real" style="font-size: 1.2em; font-weight: bold; color: #d84315;">0.00 m</span></div>
 
         <button class="btn btn-save" onclick="enviarExcel()">💾 GUARDAR CAMBIOS EN HOJA</button>
-        <button class="btn" style="background:#455a64; color:white;" onclick="conectarBLE()">🔗 VINCULAR SENSOR</button>
+        <button class="btn" style="background:#455a64; color:white;" onclick="conectarBLE()">🔗 VINCULAR SENSOR ESP32</button>
     </div>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwrFaJIkebV9PmlyLmefrH5rLffGoQo_xDSJCu2TaAsLHXtWSulgrGKBFhQ3UMQd2z3/exec";
+    // PEGA TU NUEVA URL AQUÍ ABAJO:
+    const SCRIPT_URL = "TU_NUEVA_URL_AQUÍ"; 
+
     let pesoActual = 0, pesoRef = 0, datosExcel = [];
 
     async function cargarTanques() {
-        const r = await fetch(SCRIPT_URL);
-        datosExcel = await r.json();
-        let html = "";
-        datosExcel.forEach((f, i) => { html += `<option value="${i}">${f[0]}</option>`; });
-        document.getElementById('listaTanques').innerHTML = html;
-        cambiarTanque();
+        if(SCRIPT_URL === "TU_NUEVA_URL_AQUÍ") { alert("Por favor, añade la URL del Script."); return; }
+        try {
+            const r = await fetch(SCRIPT_URL);
+            datosExcel = await r.json();
+            let html = "";
+            datosExcel.forEach((f, i) => { html += `<option value="${i}">${f[0]}</option>`; });
+            document.getElementById('listaTanques').innerHTML = html;
+            cambiarTanque();
+        } catch(e) { console.log(e); }
     }
 
     function cambiarTanque() {
         const i = document.getElementById('listaTanques').value;
         const t = datosExcel[i];
         if(!t) return;
-        
-        // Mapeo 1 a 1 con las columnas A-H de tu hoja
-        document.getElementById('e-id').value = t[0] || "";
-        document.getElementById('e-dens').value = t[1] || "";
-        document.getElementById('e-sens').value = t[2] || "";
-        document.getElementById('e-com').value = t[3] || "";
-        document.getElementById('e-est').value = t[4] || "";
-        document.getElementById('e-ubic').value = t[5] || "";
-        document.getElementById('e-vol').value = t[6] || "";
-        document.getElementById('e-cap').value = t[7] || "";
-
-        const estado = (t[4] || "").toLowerCase();
-        document.getElementById('panelCalib').classList.toggle('locked', estado === "calibrado");
-        document.getElementById('lockMsg').style.display = (estado === "calibrado") ? 'flex' : 'none';
+        document.getElementById('e-id').value = t[0] || "";    
+        document.getElementById('e-vol').value = t[1] || "";   
+        document.getElementById('e-diam').value = t[2] || "";  
+        document.getElementById('e-alt').value = t[3] || "";   
+        document.getElementById('e-dens').value = t[4] || "";  
+        document.getElementById('e-sens').value = t[5] || "";  
+        document.getElementById('e-com').value = t[6] || "";   
+        document.getElementById('e-est').value = t[7] || "";   
+        const estado = (t[7] || "").toString().toUpperCase();
+        document.getElementById('panelCalib').classList.toggle('locked', estado === "CALIBRADO");
+        document.getElementById('lockMsg').style.display = (estado === "CALIBRADO") ? 'flex' : 'none';
         actualizarUI();
     }
 
     function iniciarCalibracion() { pesoRef = pesoActual; }
 
     function actualizarUI() {
-        document.getElementById('v-cruda-cal').innerText = pesoActual.toFixed(2);
         document.getElementById('v-delta').innerText = (pesoActual - pesoRef).toFixed(2) + " g";
-        
         let dens = parseFloat(document.getElementById('e-dens').value) || 0.85;
-        let sensorSize = parseFloat(document.getElementById('e-sens').value) || 1.5;
-        let area = Math.PI * Math.pow((sensorSize * 0.0254)/2, 2);
-        let altura = ((pesoActual / 1000) * 9.81) / (area * dens * 1000 * 9.81);
-        
-        document.getElementById('v-altura').innerText = altura.toFixed(2) + " m";
-        let pesoCalc = (pesoActual * 1.5).toFixed(2);
-        document.getElementById('display-kg').innerText = pesoCalc + " kg";
-        // Opcional: actualizar el campo de volumen con el dato en vivo
-        document.getElementById('e-vol').value = pesoCalc;
+        let alturaM = ((pesoActual / 1000) * 9.81) / (0.00114 * dens * 1000 * 9.81);
+        document.getElementById('v-altura-real').innerText = alturaM.toFixed(2) + " m";
+        document.getElementById('display-kg').innerText = (pesoActual * 1.5).toFixed(2) + " kg";
+    }
+
+    function calcularDiametro() {
+        let kg = parseFloat(document.getElementById('kg-movidos').value) || 0;
+        let deltaG = Math.abs(pesoActual - pesoRef);
+        let dens = parseFloat(document.getElementById('e-dens').value) || 0.85;
+        if (kg > 0 && deltaG > 0) {
+            let deltaH = ((deltaG / 1000) * 9.81) / (0.00114 * dens * 1000 * 9.81);
+            let diam = 2 * Math.sqrt((kg / (dens * 1000)) / (Math.PI * deltaH));
+            document.getElementById('v-res-diametro').innerText = diam.toFixed(2) + " m";
+        }
+    }
+
+    function enviarExcel() {
+        const i = document.getElementById('listaTanques').value;
+        const payload = {
+            fila: parseInt(i) + 2,
+            datos: [
+                document.getElementById('e-id').value,
+                document.getElementById('e-vol').value,
+                document.getElementById('e-diam').value,
+                document.getElementById('e-alt').value,
+                document.getElementById('e-dens').value,
+                document.getElementById('e-sens').value,
+                document.getElementById('e-com').value,
+                document.getElementById('e-est').value
+            ]
+        };
+        fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) })
+        .then(() => alert("✅ Cambios guardados en la Hoja"));
     }
 
     async function conectarBLE() {
@@ -131,26 +148,6 @@
             pesoActual = parseFloat(new TextDecoder().decode(e.target.value));
             actualizarUI();
         });
-    }
-
-    function enviarExcel() {
-        const i = document.getElementById('listaTanques').value;
-        const payload = {
-            fila: parseInt(i) + 2,
-            // Enviamos un objeto con todos los campos para que tu Script los procese
-            datos: [
-                document.getElementById('e-id').value,
-                document.getElementById('e-dens').value,
-                document.getElementById('e-sens').value,
-                document.getElementById('e-com').value,
-                document.getElementById('e-est').value,
-                document.getElementById('e-ubic').value,
-                document.getElementById('e-vol').value,
-                document.getElementById('e-cap').value
-            ]
-        };
-        fetch(SCRIPT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) })
-        .then(() => alert("✅ Hoja actualizada con éxito"));
     }
 
     window.onload = cargarTanques;
